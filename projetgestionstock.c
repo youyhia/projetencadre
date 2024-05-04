@@ -1,0 +1,441 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_NOM 50
+#define MAX_DESC 255
+#define MAX_USER 50
+#define FILENAME "stock.csv"
+
+typedef struct Produit {
+    int id;
+    char nom[MAX_NOM];
+    char description[MAX_DESC];
+    char utilisateur[MAX_USER];
+    float prix_unitaire;
+    int quantite;
+    int seuil_alerte;
+    char date_entree[11];
+    char date_sortie[11];
+    struct Produit *suivant;
+} Produit;
+
+// Prototypes des nouvelles fonctions
+
+
+Produit *chargerProduits();
+void sauvegarderProduits(Produit *tete);
+Produit *ajouterProduit(Produit *tete, int *dernierId);
+void afficherProduits(Produit *tete);
+Produit *supprimerProduit(Produit *tete, int id);
+void modifierProduit(Produit *tete, int id);
+void rechercherProduit(Produit *tete);
+void rechercherParNom(Produit *tete, char *nom);
+void rechercherParUtilisateur(Produit *tete, char *utilisateur);
+void trierProduits(Produit **tete, int mode);
+void libererListe(Produit *tete);
+void printProductDetails(Produit *prod);
+
+int main() {
+    char utilisateur[MAX_USER];
+    printf("Entrez votre nom pour commencer : ");
+    fgets(utilisateur, MAX_USER, stdin);
+    utilisateur[strcspn(utilisateur, "\n")] = 0; // Remove newline character
+
+    Produit *listeProduits = chargerProduits();
+    int dernierId = 1; // Détermine le prochain ID disponible pour un nouveau produit
+    Produit *temp = listeProduits;
+    while (temp) {
+        if (temp->id >= dernierId) {
+            dernierId = temp->id + 1;
+        }
+        temp = temp->suivant;
+    }
+
+    int choix;
+    do {
+        printf("\nMenu:\n");
+        printf("1. Ajouter un produit\n");
+        printf("2. Supprimer un produit\n");
+        printf("3. Modifier un produit\n");
+        printf("4. Afficher tous les produits\n");
+        printf("5. Rechercher un produit\n");
+        printf("6. Rechercher un produit par nom du produit \n");
+        printf("7. Rechercher un produit par nom d utilisateur \n");
+        printf("8. Trier les produits\n");
+       printf("9. Sauvegarder les produits\n");
+        printf("10. Quitter\n");
+        printf("Entrez votre choix : ");
+        scanf("%d", &choix);
+        getchar(); // Consommer le caractère de nouvelle ligne après scanf
+        char recherche[MAX_NOM];
+        switch (choix) {
+            case 1:
+                listeProduits = ajouterProduit(listeProduits, &dernierId);
+                break;
+            case 2:
+                printf("Entrez l'ID du produit à supprimer : ");
+                int supprId;
+                scanf("%d", &supprId);
+                getchar();
+                listeProduits = supprimerProduit(listeProduits, supprId);
+                break;
+            case 3:
+                printf("Entrez l'ID du produit à modifier : ");
+                int modifId;
+                scanf("%d", &modifId);
+                getchar();
+                modifierProduit(listeProduits, modifId);
+                break;
+            case 4:
+                afficherProduits(listeProduits);
+                break;
+            case 5:
+                rechercherProduit(listeProduits);
+                break;
+            case 6 : 
+                  printf("Entrez le nom du produit à rechercher : ");
+                    fgets(recherche, MAX_NOM, stdin);
+                    recherche[strcspn(recherche, "\n")] = 0;
+                    rechercherParNom(listeProduits, recherche);
+                    break;
+             case 7:
+                    printf("Entrez le nom d'utilisateur à rechercher: ");
+fgets(recherche, MAX_NOM, stdin);
+recherche[strespn(recherche, "\n")] = 0;
+rechercherParUtilisateur (listeProduits, recherche);
+break;
+            case 8:
+                printf("Trier par 1: Nom, 2: Prix: ");
+                int mode;
+                scanf("%d", &mode);
+                getchar();
+                trierProduits(&listeProduits, mode);
+                break;
+            case 9:
+                sauvegarderProduits(listeProduits);
+                printf("Produits sauvegardés avec succès.\n");
+                break;
+            case 10:
+                printf("Au revoir!\n");
+                break;
+            default:
+                printf("Choix invalide.\n");
+                break;
+                
+        }
+    } while (choix != 10);
+
+    libererListe(listeProduits); // Libérer la mémoire allouée pour la liste
+    return 0;
+}
+
+// Charge les produits depuis le fichier CSV dans une liste chaînée
+Produit *chargerProduits() {
+    FILE *file = fopen(FILENAME, "r");
+    if (!file) {
+        printf("Fichier non trouvé, démarrage avec une liste vide.\n");
+        return NULL;
+    }
+
+    Produit *tete = NULL, *courant = NULL;
+    while (!feof(file)) {
+        Produit *nouveau = malloc(sizeof(Produit));
+        if (fscanf(file, "%d,%49[^,],%254[^,],%49[^,],%f,%d,%d,%10[^,],%10[^\n]",
+                   &nouveau->id, nouveau->nom, nouveau->description, nouveau->utilisateur,
+                   &nouveau->prix_unitaire, &nouveau->quantite, &nouveau->seuil_alerte,
+                   nouveau->date_entree, nouveau->date_sortie) == 9) {
+            nouveau->suivant = NULL;
+            if (!tete) {
+                tete = nouveau;
+                courant = nouveau;
+            } else {
+                courant->suivant = nouveau;
+                courant = nouveau;
+            }
+        } else {
+            free(nouveau);
+            break;  // Si la lecture échoue, arrêtez la boucle
+        }
+    }
+    fclose(file);
+    return tete;
+}
+
+// Sauvegarde la liste des produits dans un fichier CSV
+void sauvegarderProduits(Produit *tete) {
+    FILE *file =            (FILENAME, "w");
+    if (!file) {
+        printf("Erreur lors de l'ouverture du fichier.\n");
+        return;
+    }
+
+    Produit *courant = tete;
+    while (courant != NULL) {
+        fprintf(file, "%d,%s,%s,%s,%.2f,%d,%d,%s,%s\n",
+                courant->id, courant->nom, courant->description, courant->utilisateur,
+                courant->prix_unitaire, courant->quantite, courant->seuil_alerte,
+                courant->date_entree, courant->date_sortie);
+        courant = courant->suivant;
+    }
+
+    fclose(file);
+}
+
+// Implémentations des fonctions
+
+
+
+
+Produit *ajouterProduit(Produit *tete, int *dernierId) {
+    Produit *nouveau = (Produit*) malloc(sizeof(Produit));
+    if (nouveau == NULL) {
+        printf("Erreur d'allocation mémoire.\n");
+        return tete;
+    }
+    nouveau->id = (*dernierId)++;
+    printf("Nom du produit: ");
+    fgets(nouveau->nom, MAX_NOM, stdin);
+    nouveau->nom[strcspn(nouveau->nom, "\n")] = 0; // Remove newline character
+
+    printf("Description: ");
+    fgets(nouveau->description, MAX_DESC, stdin);
+    nouveau->description[strcspn(nouveau->description, "\n")] = 0;
+
+    printf("Nom d'utilisateur: ");
+    fgets(nouveau->utilisateur, MAX_USER, stdin);
+    nouveau->utilisateur[strcspn(nouveau->utilisateur, "\n")] = 0;
+
+    printf("Prix unitaire: ");
+    scanf("%f", &nouveau->prix_unitaire);
+    printf("Quantité en stock: ");
+    scanf("%d", &nouveau->quantite);
+    printf("Seuil d'alerte de stock: ");
+    scanf("%d", &nouveau->seuil_alerte);
+    getchar(); // Consume the newline character left by scanf
+
+    printf("Date d'entrée en stock (YYYY-MM-DD): ");
+    fgets(nouveau->date_entree, 11, stdin);
+    nouveau->date_entree[strcspn(nouveau->date_entree, "\n")] = 0;
+
+    printf("Date de sortie du stock (YYYY-MM-DD): ");
+    fgets(nouveau->date_sortie, 11, stdin);
+    nouveau->date_sortie[strcspn(nouveau->date_sortie, "\n")] = 0;
+
+    nouveau->suivant = tete; // Insérer au début de la liste
+    return nouveau;
+}
+
+void afficherProduits(Produit *tete) {
+    if (tete == NULL) {
+        printf("Aucun produit à afficher.\n");
+        return;
+    }
+    Produit *courant = tete;
+    printf("Liste des produits:\n");
+    while (courant != NULL) {
+        printf("ID: %d, Nom: %s, Description: %s, Utilisateur: %s, Prix: %.2f, Quantité: %d, Seuil: %d, Entrée: %s, Sortie: %s\n",
+               courant->id, courant->nom, courant->description, courant->utilisateur,
+               courant->prix_unitaire, courant->quantite, courant->seuil_alerte,
+               courant->date_entree, courant->date_sortie);
+        cour        ant = courant->suivant;
+    }
+}
+
+Produit *supprimerProduit(Produit *tete, int id) {
+    Produit *courant = tete, *precedent = NULL;
+    while (courant != NULL && courant->id != id) {
+        precedent = courant;
+        courant = courant->suivant;
+    }
+
+    if (courant == NULL) {
+        printf("Produit avec ID %d non trouvé.\n", id);
+        return tete;
+    }
+
+    if (precedent == NULL) {
+        tete = courant->suivant;
+    } else {
+        precedent->suivant = courant->suivant;
+    }
+
+    free(courant);
+    printf("Produit avec ID %d supprimé.\n", id);
+    return tete;
+}
+
+void modifierProduit(Produit *tete, int id) {
+    Produit *courant = tete;
+    while (courant != NULL && courant->id != id) {
+        courant = courant->suivant;
+    }
+
+    if (courant == NULL) {
+        printf("Produit avec ID %d non trouvé.\n", id);
+        return;
+    }
+
+    printf("Modifier le nom du produit (actuel : %s): ", courant->nom);
+    fgets(courant->nom, MAX_NOM, stdin);
+    courant->nom[strcspn(courant->nom, "\n")] = 0;
+
+    printf("Modifier la description (actuelle : %s): ", courant->description);
+    fgets(courant->description, MAX_DESC, stdin);
+    courant->description[strcspn(courant->description, "\n")] = 0;
+
+    printf("Modifier le nom d'utilisateur (actuel : %s): ", courant->utilisateur);
+    fgets(courant->utilisateur, MAX_USER, stdin);
+    courant->utilisateur[strcspn(courant->utilisateur, "\n")] = 0;
+
+    printf("Modifier le prix unitaire (actuel : %.2f): ", courant->prix_unitaire);
+    scanf("%f", &courant->prix_unitaire);
+    printf("Modifier la quantité en stock (actuelle : %d): ", courant->quantite);
+    scanf("%d", &courant->quantite);
+    printf("Modifier le seuil d'alerte de stock (actuel : %d): ", courant->seuil_alerte);
+    scanf("%d", &courant->seuil_alerte);
+    getchar(); // Consume the newline character left by scanf
+
+    printf("Modifier la date d'entrée en stock (actuelle : %s): ", courant->date_entree);
+    fgets(courant->date_entree, 11, stdin);
+    courant->date_entree[strcspn(courant->date_entree, "\n")] = 0;
+
+    printf("Modifier la date de sortie du stock (actuelle : %s): ", courant->date_sortie);
+    fgets(courant->date_sortie, 11, stdin);
+    courant->date_sortie[strcspn(courant->date_sortie, "\n")] = 0;
+
+    printf("Produit avec ID %d modifié.\n", id);
+}
+
+void rechercherProduit(Produit *tete) {
+    char recherche[MAX_NOM];
+    printf("Entrez le nom ou l'utilisateur du produit à rechercher: ");
+    fgets(recherche, MAX_NOM, stdin);
+    recherche[strcspn(recherche, "\n")] = 0; // Remove newline character
+
+    Produit *courant = tete;
+    int trouve = 0;
+    printf("Résultats de la recherche pour '%s':\n", recherche);
+    while (courant != NULL) {
+        if (strstr(courant->nom, recherche) != NULL || strstr(courant->utilisateur, recherche) != NULL) {
+            printf("ID: %d, Nom: %s, Description: %s, Utilisateur: %s, Prix: %.2f, Quantité: %d, Seuil: %d, Entrée: %s, Sortie: %s\n",
+                   courant->id, courant->nom, courant->description, courant->utilisateur,
+                   courant->prix_unitaire, courant->quantite, courant->seuil_alerte,
+                   courant->date_entree, courant->date_sortie);
+            trouve = 1;
+        }
+        courant = courant->suivant;
+    }
+
+    if (!trouve) {
+        printf("Aucun produit trouvé correspondant à '%s'.\n", recherche);
+    }
+}
+
+// Fonction pour rechercher un produit par nom de produit
+void rechercherParNom(Produit *tete, char *nom) {
+    Produit *courant = tete;
+    int trouve = 0;
+
+    printf("Résultats de recherche pour \"%s\" :\n", nom);
+    while (courant != NULL) {
+        if (strstr(courant->nom, nom) != NULL) {
+            printProductDetails(courant);
+            trouve = 1;
+        }
+        courant = courant->suivant;
+    }
+
+    if (!trouve) {
+        printf("Aucun produit trouvé avec ce nom.\n");
+    }
+}
+
+// Fonction pour rechercher un produit par nom d'utilisateur
+void rechercherParUtilisateur(Produit *tete, char *utilisateur) {
+    Produit *courant = tete;
+    int trouve = 0;
+
+    printf("Résultats de recherche pour l'utilisateur \"%s\" :\n", utilisateur);
+    while (courant != NULL) {
+        if (strcmp(courant->utilisateur, utilisateur) == 0) {
+            printProductDetails(courant);
+            trouve = 1;
+        }
+        courant = courant->suivant;
+    }
+
+    if (!trouve) {
+        printf("Aucun produit trouvé pour cet utilisateur.\n");
+    }
+}
+
+
+void trierProduits(Produit **tete, int mode) {
+    if (*tete == NULL || (*tete)->suivant == NULL) {
+        printf("Pas assez”);
+        return;
+}
+
+int swapped;
+Produit *ptr1;
+Produit *lptr = NULL;
+
+do {
+    swapped = 0;
+    ptr1 = *tete;
+
+    while (ptr1->suivant != lptr) {
+        int cmp = 0;
+        if (mode == 1) { // Tri par nom
+            cmp = strcmp(ptr1->nom, ptr1->suivant->nom);
+        } else if (mode == 2) { // Tri par prix unitaire
+            cmp = (ptr1->prix_unitaire > ptr1->suivant->prix_unitaire) ? 1 : -1;
+        }
+
+        if (cmp > 0) {
+            Produit *tmp = ptr1->suivant;
+            ptr1->suivant = tmp->suivant;
+            tmp->suivant = ptr1;
+
+            // Adjusting the previous node link to the new first node after swap
+            if (*tete == ptr1) {
+                *tete = tmp;
+            } else {
+                Produit *find = *tete;
+                while (find->suivant != ptr1) {
+                    find = find->suivant;
+                }
+                find->suivant = tmp;
+            }
+
+            ptr1 = tmp; // Continue with the new node at this position
+            swapped = 1;
+        }
+        ptr1 = ptr1->suivant;
+    }
+    1ptr = ptr1;
+} while (swapped);
+printf("Produits triés avec succès.\n");
+}
+
+void libererListe(Produit *tete) {
+    Produit *current = tete;
+    while (current != NULL) {
+        Produit *next = current->suivant;
+        free(current);
+        current = next;
+    }
+}
+
+// Helper function to print a product's details
+void printProductDetails(Produit *prod) {
+    if (prod) {
+        printf("ID: %d, Nom: %s, Description: %s, Utilisateur: %s, Prix: %.2f, Quantité: %d, Seuil: %d, Entrée: %s, Sortie: %s\n",
+               prod->id, prod->nom, prod->description, prod->utilisateur,
+               prod->prix_unitaire, prod->quantite, prod->seuil_alerte,
+               prod->date_entree, prod->date_sortie);
+    } else {
+        printf("Erreur: Aucun produit à afficher.\n");
+    }
+}
